@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mediverse-AI</title>
+<style>
+:root{--bg:#F5F6FB;--card:#fff;--ink:#1B1F3B;--mut:#5E6483;--pri:#4338CA;--on:#fff;--ln:#DDE0F0;--hi:#C62828;--md:#B26A00;--lo:#2E7D32}
+@media(prefers-color-scheme:dark){:root{--bg:#0F1226;--card:#181C38;--ink:#E8EAF8;--mut:#9AA0C8;--pri:#8B83FF;--on:#10122A;--ln:#2A2F57;--hi:#FF7B72;--md:#F2B84B;--lo:#6FD08C}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+header{background:var(--pri);color:var(--on);padding:14px 20px}header b{font-size:22px}header span{opacity:.85;margin-left:10px;font-size:14px}
+nav{display:flex;gap:4px;padding:8px 16px;overflow:auto;background:var(--card);border-bottom:1px solid var(--ln)}
+nav button{background:none;border:0;color:var(--mut);padding:8px 14px;border-radius:6px;cursor:pointer;font-size:15px;white-space:nowrap}nav button.on{background:var(--pri);color:var(--on)}
+main{max-width:960px;margin:0 auto;padding:20px}.card{background:var(--card);border:1px solid var(--ln);border-radius:10px;padding:16px;margin-bottom:14px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+input,select,textarea{padding:9px;border:1px solid var(--ln);border-radius:6px;background:var(--bg);color:var(--ink);font-size:15px;max-width:100%}
+.p{background:var(--pri);color:var(--on);border:0;border-radius:6px;padding:9px 16px;font-weight:600;cursor:pointer}.p.s{background:none;color:var(--pri);border:1px solid var(--pri)}
+:focus-visible{outline:3px solid var(--md);outline-offset:2px}.big{font-size:40px;font-weight:700;margin:0}.mut{color:var(--mut);font-size:14px}h2{margin:0 0 10px}h3{margin:0 0 8px}
+.al{border-left:5px solid;padding:8px 12px;margin:8px 0;background:var(--bg);border-radius:4px}.High{border-color:var(--hi)}.Moderate{border-color:var(--md)}.Low,.Normal{border-color:var(--lo)}
+.sev{font-weight:700}.High .sev{color:var(--hi)}.Moderate .sev{color:var(--md)}.Low .sev,.Normal .sev{color:var(--lo)}
+canvas{width:100%;height:200px}.hide{display:none}table{border-collapse:collapse;width:100%}td,th{padding:6px 8px;border-bottom:1px solid var(--ln);text-align:left}
+.em{background:var(--hi);color:#fff;padding:14px;border-radius:8px;font-weight:600;margin-bottom:14px}
+</style></head><body>
+<header><b>Mediverse-AI</b><span>Offline rule-based health guardian. No account, no API key, data stays on your device.</span></header>
+<nav id="tabs"></nav><main>
+<div id="emg" class="em hide"></div>
+<section id="dash"><div class="grid"><div class="card"><div class="mut">Overall risk score</div><p class="big" id="rs">-</p><div id="rl" class="mut">Save a reading to calculate</div></div>
+<div class="card"><div class="mut">BMI</div><p class="big" id="bm">-</p><div id="bc" class="mut"></div></div>
+<div class="card"><div class="mut">Blood pressure</div><p class="big" id="bp">-</p><div id="bpc" class="mut"></div></div>
+<div class="card"><div class="mut">Medicine adherence (7 days)</div><p class="big" id="ad">-</p></div></div>
+<div class="card"><h3>Alerts and recommendations</h3><div id="al">Nothing to show yet. Add your profile and a reading.</div></div></section>
+
+<section id="log" class="hide"><div class="card"><h2>Profile</h2><div class="row"><input id="p_age" type="number" placeholder="Age"><select id="p_sex"><option value="">Sex</option><option>Female</option><option>Male</option></select><input id="p_h" type="number" placeholder="Height cm"><input id="p_w" type="number" placeholder="Weight kg"><label class="mut"><input type="checkbox" id="p_sm"> Smoker</label><label class="mut"><input type="checkbox" id="p_fh"> Family history of heart disease or diabetes</label><button class="p" onclick="saveP()">Save profile</button></div></div>
+<div class="card"><h2>Add a reading</h2><div class="row"><input id="r_hr" type="number" placeholder="Heart rate bpm"><input id="r_sy" type="number" placeholder="Systolic"><input id="r_di" type="number" placeholder="Diastolic"><input id="r_gl" type="number" placeholder="Glucose mg/dL"><input id="r_sp" type="number" placeholder="SpO2 %"><input id="r_tp" type="number" step=".1" placeholder="Temp C"><input id="r_wt" type="number" step=".1" placeholder="Weight kg"><button class="p" onclick="addR()">Save reading</button></div></div>
+<div class="card"><h3>History</h3><table id="hist"></table><p class="row"><button class="p s" onclick="exp()">Export JSON</button><button class="p s" onclick="if(confirm('Delete all data?')){localStorage.removeItem('mv');load();rend()}">Clear data</button></p></div></section>
+
+<section id="chart" class="hide"><div class="card"><h2>Trends</h2><select id="cm" onchange="chart()"><option value="hr">Heart rate</option><option value="sy">Systolic BP</option><option value="di">Diastolic BP</option><option value="gl">Glucose</option><option value="wt">Weight</option><option value="risk">Risk score</option></select><canvas id="cv" width="900" height="200"></canvas><p class="mut" id="tr"></p></div></section>
+
+<section id="sym" class="hide"><div class="card"><h2>Symptom checker</h2><p class="mut">Describe how you feel in plain words. Matching is by keywords, not by a language model.</p><div class="row"><input id="sx" style="flex:1;min-width:220px" placeholder="e.g. chest pain and sweating since morning"><button class="p" onclick="symp()">Check</button></div><div id="so"></div></div></section>
+
+<section id="rep" class="hide"><div class="card"><h2>Medical report analyser</h2><p class="mut">Upload a .txt or .csv lab report, or paste its text. Lines like "Hemoglobin 11.2 g/dL" are matched against reference ranges on your device. PDFs and photos cannot be read offline: type or paste their values.</p>
+<input type="file" id="rf" accept=".txt,.csv,text/plain"><textarea id="rt" rows="6" style="width:100%;margin-top:8px" placeholder="Hemoglobin 11.2&#10;Glucose fasting 132&#10;LDL 165"></textarea><p><button class="p" onclick="rep()">Analyse report</button></p><div id="ro"></div></div></section>
+
+<section id="med" class="hide"><div class="card"><h2>Medicines</h2><div class="row"><input id="mn" placeholder="Medicine and dose"><input id="mt" type="time"><button class="p" onclick="addM()">Add</button></div><div id="ml"></div></div></section>
+
+<section id="sos" class="hide"><div class="card"><h2>Emergency guide</h2><p><b>Call your emergency number now</b> for chest pain, trouble breathing, stroke signs (face droop, arm weakness, slurred speech), heavy bleeding, seizures or loss of consciousness. India 112 or 108, US 911, UK 999.</p><p class="row"><a href="tel:112"><button class="p">Call 112</button></a><button class="p s" onclick="loc()">Show my location</button></p><p id="lo" class="mut"></p>
+<h3>While you wait</h3><ul><li>Stay calm, sit or lie down, and unlock the door.</li><li>Chest pain: chew one regular aspirin only if you are not allergic and a clinician has not told you otherwise.</li><li>Stroke signs: note the time symptoms started and do not give food or drink.</li><li>Bleeding: press firmly on the wound with clean cloth.</li></ul></div></section>
+</main>
+<script>
+const $=id=>document.getElementById(id),LS=localStorage;let S={p:{},r:[],m:[],rep:[]};
+function load(){try{S=Object.assign({p:{},r:[],m:[],rep:[]},JSON.parse(LS.mv||"{}"))}catch(e){}}function sv(){LS.mv=JSON.stringify(S)}
+const T=[["dash","Dashboard"],["log","Profile and readings"],["chart","Trends"],["sym","Symptoms"],["rep","Reports"],["med","Medicines"],["sos","Emergency"]];
+$("tabs").innerHTML=T.map(t=>`<button data-t="${t[0]}">${t[1]}</button>`).join("");
+document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>go(b.dataset.t));
+function go(t){document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b.dataset.t==t));document.querySelectorAll("main section").forEach(s=>s.classList.toggle("hide",s.id!=t));rend()}
+const esc=s=>String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])),today=()=>new Date().toISOString().slice(0,10),dd=d=>Math.floor((new Date(today())-new Date(d))/864e5);
+function bmi(){const p=S.p;return p.h&&p.w?+(p.w/((p.h/100)**2)).toFixed(1):0}
+function bpCat(s,d){if(s>=180||d>=120)return["Hypertensive crisis","High"];if(s>=140||d>=90)return["Hypertension stage 2","High"];if(s>=130||d>=80)return["Hypertension stage 1","Moderate"];if(s>=120)return["Elevated","Low"];if(s&&s<90||d&&d<60)return["Low blood pressure","Moderate"];return["Normal","Normal"]}
+/* local rule engine: [condition, severity, points, message, recommendation] */
+function engine(){const A=[],r=S.r[S.r.length-1]||{},p=S.p,b=bmi();let pts=0;const add=(sev,pt,m,rec)=>{A.push({sev,m,rec});pts+=pt};
+ if(r.hr>100)add(r.hr>130?"High":"Moderate",r.hr>130?25:12,`Heart rate ${r.hr} bpm is above 100 (tachycardia range)`,"Rest, hydrate and recheck in 10 minutes. See a doctor if it stays high or you feel dizzy or have chest pain.");
+ if(r.hr&&r.hr<50)add("Moderate",12,`Heart rate ${r.hr} bpm is below 50`,"Common in athletes. If you feel faint or tired, see a doctor.");
+ if(r.sy){const[c,s]=bpCat(r.sy,r.di);if(s!="Normal")add(s,s=="High"?28:s=="Moderate"?14:5,`Blood pressure ${r.sy}/${r.di}: ${c}`,s=="High"?(c.includes("crisis")?"Seek emergency care now, especially with headache, chest pain or vision changes.":"See a doctor soon. Reduce salt, avoid smoking and keep a daily BP log."):"Cut salt, exercise 150 minutes a week and recheck weekly.")}
+ if(r.gl>=126)add("High",22,`Glucose ${r.gl} mg/dL is in the diabetic range`,"Book a fasting glucose and HbA1c test with a doctor.");else if(r.gl>=100)add("Moderate",10,`Glucose ${r.gl} mg/dL is in the pre-diabetes range`,"Reduce sugary food, walk after meals and retest in a month.");else if(r.gl&&r.gl<70)add("High",20,`Glucose ${r.gl} mg/dL is low`,"Take 15 g of fast sugar (juice, glucose) and recheck in 15 minutes.");
+ if(r.sp&&r.sp<92)add("High",28,`SpO2 ${r.sp}% is low`,"Sit upright and seek medical care now if breathing is difficult.");else if(r.sp&&r.sp<95)add("Moderate",12,`SpO2 ${r.sp}% is borderline`,"Recheck after resting; see a doctor if it persists.");
+ if(r.tp>=39)add("High",15,`Temperature ${r.tp} C is a high fever`,"Hydrate, take a fever reducer as labelled and see a doctor if it lasts over 2 days.");else if(r.tp>=37.8)add("Moderate",8,`Temperature ${r.tp} C is a fever`,"Rest and fluids; monitor.");
+ if(b>=30)add("Moderate",14,`BMI ${b} indicates obesity`,"Aim for 5 to 10 percent weight loss with diet and activity; ask a doctor about a plan.");else if(b>=25)add("Low",6,`BMI ${b} indicates overweight`,"Add daily walking and reduce sugary drinks.");else if(b&&b<18.5)add("Moderate",8,`BMI ${b} indicates underweight`,"Review nutrition with a doctor or dietitian.");
+ if(p.age>=45)pts+=5;if(p.sm){add("Moderate",10,"Smoking raises heart and lung risk","Seek a cessation programme; quitting lowers risk within weeks.")}if(p.fh)pts+=6;
+ S.m.forEach(m=>{const g=m.last?dd(m.last):dd(m.added);if(g>3)add("High",12,`${m.n}: no dose logged for ${g} days (adherence alert)`,"Take it as prescribed and talk to your doctor before restarting if you skipped many days.")});
+ return{A,score:Math.min(100,pts)}}
+function rend(){const e=engine(),r=S.r[S.r.length-1],b=bmi();$("rs").textContent=r?e.score:"-";$("rl").textContent=r?(e.score>=50?"High risk: consider seeing a doctor":e.score>=25?"Moderate risk: monitor":"Low risk"):"Save a reading to calculate";
+ $("bm").textContent=b||"-";$("bc").textContent=b?(b>=30?"Obese":b>=25?"Overweight":b<18.5?"Underweight":"Healthy range"):"Add height and weight";
+ $("bp").textContent=r&&r.sy?`${r.sy}/${r.di}`:"-";$("bpc").textContent=r&&r.sy?bpCat(r.sy,r.di)[0]:"";
+ const n=S.m.length,tk=S.m.reduce((a,m)=>a+(m.days||[]).filter(d=>dd(d)<7).length,0);$("ad").textContent=n?Math.min(100,Math.round(tk/(n*7)*100))+"%":"-";
+ $("al").innerHTML=e.A.length?e.A.sort((a,b)=>"HighModerateLow".indexOf(a.sev)-"HighModerateLow".indexOf(b.sev)).map(a=>`<div class="al ${a.sev}"><span class="sev">${a.sev}</span> ${esc(a.m)}<br><span class="mut">${esc(a.rec)}</span></div>`).join(""):(r?'<div class="al Normal"><span class="sev">Normal</span> No rule triggered. Keep logging.</div>':"Nothing to show yet. Add your profile and a reading.");
+ const x=$("emg"),crit=e.A.filter(a=>a.sev=="High"&&/crisis|SpO2|Glucose.*low/.test(a.m));x.classList.toggle("hide",!crit.length);x.textContent=crit.length?"Possible emergency: "+crit[0].m+". Open the Emergency tab and call your local emergency number.":"";
+ ["age","sex","h","w"].forEach(k=>{if(S.p[k]&&!$("p_"+k).value)$("p_"+k).value=S.p[k]});$("p_sm").checked=!!S.p.sm;$("p_fh").checked=!!S.p.fh;
+ $("hist").innerHTML="<tr><th>Date</th><th>HR</th><th>BP</th><th>Glucose</th><th>SpO2</th><th>Risk</th></tr>"+S.r.slice(-10).reverse().map(v=>`<tr><td>${v.d}</td><td>${v.hr||"-"}</td><td>${v.sy||"-"}/${v.di||"-"}</td><td>${v.gl||"-"}</td><td>${v.sp||"-"}</td><td>${v.risk}</td></tr>`).join("");
+ $("ml").innerHTML=S.m.map((m,i)=>`<div class="row" style="margin-top:8px"><b>${esc(m.n)}</b><span class="mut">${m.t||""}</span><button class="p" onclick="take(${i})">Taken today</button><span class="mut">${(m.days||[]).includes(today())?"logged today":"last: "+(m.last||"never")}</span><button class="p s" onclick="S.m.splice(${i},1);sv();rend()">Remove</button></div>`).join("")||'<p class="mut">No medicines yet.</p>';
+ if(!$("chart").classList.contains("hide"))chart()}
+function saveP(){const g=i=>+$(i).value||0;S.p={age:g("p_age"),sex:$("p_sex").value,h:g("p_h"),w:g("p_w"),sm:$("p_sm").checked,fh:$("p_fh").checked};sv();rend()}
+function addR(){const g=i=>+$(i).value||0,v={d:today(),t:Date.now(),hr:g("r_hr"),sy:g("r_sy"),di:g("r_di"),gl:g("r_gl"),sp:g("r_sp"),tp:g("r_tp"),wt:g("r_wt")};if(!(v.hr||v.sy||v.gl||v.sp||v.tp||v.wt))return alert("Enter at least one value.");
+ if(v.wt){S.p.w=v.wt}S.r.push(v);v.risk=engine().score;sv();rend();go("dash")}
+function addM(){const n=$("mn").value.trim();if(!n)return;S.m.push({n,t:$("mt").value,added:today(),days:[]});$("mn").value="";sv();rend()}
+function take(i){const m=S.m[i];if(!m.days.includes(today()))m.days.push(today());m.last=today();sv();rend()}
+function chart(){const k=$("cm").value,d=S.r.filter(v=>v[k]).slice(-14),c=$("cv"),x=c.getContext("2d");x.clearRect(0,0,900,200);if(d.length<2){x.fillStyle="#888";x.font="16px system-ui";x.fillText("Save two or more readings to see a trend",20,100);$("tr").textContent="";return}
+ const vs=d.map(v=>v[k]),mx=Math.max(...vs)+5,mn=Math.min(...vs)-5,st=getComputedStyle(document.body).getPropertyValue("--pri");x.strokeStyle=st;x.fillStyle=st;x.lineWidth=3;x.beginPath();
+ d.forEach((v,i)=>{const X=30+i*(840/(d.length-1)),Y=185-(v[k]-mn)/(mx-mn)*165;i?x.lineTo(X,Y):x.moveTo(X,Y)});x.stroke();
+ d.forEach((v,i)=>{const X=30+i*(840/(d.length-1)),Y=185-(v[k]-mn)/(mx-mn)*165;x.beginPath();x.arc(X,Y,4,0,7);x.fill()});
+ const dl=vs[vs.length-1]-vs[0];$("tr").textContent=`${vs.length} readings. Change from first to last: ${dl>0?"+":""}${dl.toFixed(1)} (${dl>0?"rising":dl<0?"falling":"steady"}).`}
+const SY=[[/chest (pain|pressure|tight)|crushing/i,"High","Possible cardiac emergency","Call emergency services now. Do not drive yourself."],[/(can'?t|cannot|hard to|difficulty) breath|short(ness)? of breath/i,"High","Breathing difficulty","Seek emergency care now."],[/face droop|slurred|one side|arm weak|sudden numb|worst headache/i,"High","Possible stroke signs","Call emergency services now and note the time symptoms began."],[/faint|unconscious|seizure|vomit(ing)? blood|black stool|severe bleeding/i,"High","Serious warning sign","Seek emergency care now."],[/fever|temperature|chills/i,"Moderate","Fever","Rest, fluids, monitor temperature; see a doctor if above 39 C or over 2 days."],[/cough|sore throat|cold|runny nose/i,"Low","Respiratory infection symptoms","Rest, fluids, warm drinks; see a doctor if over a week or with breathlessness."],[/headache|migraine/i,"Low","Headache","Hydrate, rest in a dark room; see a doctor if sudden and severe."],[/stomach|nausea|diarrh|vomit/i,"Moderate","Stomach upset","Small sips of oral rehydration solution; see a doctor if over 2 days or with blood."],[/thirst|frequent urin|blurred vision/i,"Moderate","Possible high blood sugar signs","Check glucose and book a diabetes test."],[/stress|anxi|panic|can'?t sleep|insomnia|sad|hopeless/i,"Moderate","Mental wellbeing concern","Try slow breathing, regular sleep and talking to someone you trust. If you feel unsafe, contact a local helpline or emergency number."],[/dizz|lighthead/i,"Moderate","Dizziness","Sit down, drink water; check blood pressure and sugar; see a doctor if it recurs."]];
+function symp(){const q=$("sx").value,h=SY.filter(s=>s[0].test(q));$("so").innerHTML=(h.length?h.map(s=>`<div class="al ${s[1]}"><span class="sev">${s[1]}</span> ${s[2]}<br><span class="mut">${s[3]}</span></div>`).join(""):'<div class="al Low">No rule matched. Describe symptoms differently or see a clinician if worried.</div>')+'<p class="mut">General guidance only, not a diagnosis.</p>'}
+const LAB=[["hemoglobin|haemoglobin|hb",12,17.5,"g/dL","Low suggests anaemia"],["fasting glucose|glucose fasting|fbs|glucose",70,99,"mg/dL","High suggests pre-diabetes or diabetes"],["hba1c",0,5.6,"%","5.7-6.4 pre-diabetes, 6.5+ diabetes"],["total cholesterol|cholesterol",0,199,"mg/dL","High raises heart risk"],["ldl",0,99,"mg/dL","High raises heart risk"],["hdl",40,200,"mg/dL","Low raises heart risk"],["triglycerides",0,149,"mg/dL","High raises heart and pancreas risk"],["creatinine",0.6,1.3,"mg/dL","High may indicate kidney strain"],["tsh",0.4,4.5,"mIU/L","Abnormal suggests thyroid imbalance"],["wbc",4,11,"x10^3/uL","High may suggest infection"],["platelets?",150,450,"x10^3/uL","Low raises bleeding risk"]];
+function rep(){const f=$("rf").files[0];const run=t=>{const out=[];t.split(/\n/).forEach(l=>{for(const[n,lo,hi,u,note]of LAB){const m=l.match(new RegExp("^\\s*(?:"+n+")\\b[^0-9\\n]*?(\\d+\\.?\\d*)","i"));if(m){const v=+m[1],s=v<lo?"Low":v>hi?"High":"Normal";out.push({n:l.trim().split(/[ :]\d/)[0],v,lo,hi,u,note,s});break}}});
+ $("ro").innerHTML=out.length?"<table><tr><th>Test</th><th>Value</th><th>Reference</th><th>Result</th></tr>"+out.map(o=>`<tr><td>${esc(o.n)}</td><td>${o.v} ${o.u}</td><td>${o.lo}-${o.hi}</td><td class="${o.s=="Normal"?"Normal":"High"}"><span class="sev">${o.s}</span> ${o.s!="Normal"?esc(o.note):""}</td></tr>`).join("")+"</table><p class='mut'>Reference ranges are general adult values. Your lab's ranges take priority. Discuss results with a doctor.</p>":'<p class="mut">No known tests found. Use lines like "Hemoglobin 11.2".</p>';S.rep.push({d:today(),out});sv()};
+ f?f.text().then(run):run($("rt").value)}
+function loc(){navigator.geolocation?navigator.geolocation.getCurrentPosition(p=>$("lo").innerHTML=`<a href="https://maps.google.com/?q=${p.coords.latitude},${p.coords.longitude}">${p.coords.latitude.toFixed(4)}, ${p.coords.longitude.toFixed(4)}</a>. Read this to the emergency operator.`,()=>$("lo").textContent="Location permission denied."):0}
+function exp(){const a=document.createElement("a");a.href="data:application/json,"+encodeURIComponent(JSON.stringify(S,null,1));a.download="mediverse-data.json";a.click()}
+load();go("dash");
+</script></body></html>
